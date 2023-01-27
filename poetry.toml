@@ -1,0 +1,5 @@
+[virtualenvs]
+in-project = false
+
+[virtualenvs.options]
+system-site-packages = false
