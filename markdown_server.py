@@ -133,6 +133,10 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
         # this isn't done by the Gitlab API.
         html = re.sub(r'<pre ([^>]* *)class="code ', r'<pre \1class="code white ', html)
 
+        # Hack: Try to fix internal document links. [[_TOC_]] href's don't have
+        # the "user-content-" part but id's do.
+        html = re.sub(r'<a id="user-content-', '<a id="', html)
+
         style = ''
         for css_path in self._gitlab_css_assets:
             style += f'<link rel="stylesheet" href="/_gitlab_assets/{css_path}">\n'
