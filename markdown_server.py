@@ -20,16 +20,17 @@ from xdg import xdg_cache_home
 VERSION = "0.1.0"
 
 
-def fetch_url(url, path):
+def fetch_url(url, path, session):
     """ Download file at {url} saving its contents to {path} """
-    resp = requests.get(url)
-    if resp.status_code != HTTPStatus.OK:
-        print(f"Failed to download {url}: {resp.status_code}", file=sys.stderr)
-        return
+    with session.get(url, stream=True) as response:
+        if response.status_code != HTTPStatus.OK:
+            print(f"Failed to download {url}: {response.status_code}", file=sys.stderr)
+            return
 
-    with open(path, "wb") as f:
-        f.write(resp.content)
-        os.fchmod(f.fileno(), 0o644)
+        with open(path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=1024):
+                f.write(chunk)
+            os.fchmod(f.fileno(), 0o644)
 
     print(f"Wrote Gitlab asset file to {path}", file=sys.stderr)
 
@@ -58,21 +59,22 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
         "illustrations/image_comment_light_cursor-c587347a929a56f8b4d78d991607598f69daef0bcc58e972cabcb72ed96663d2.svg",
     ]
 
-    def __init__(self, server_cache_dir, gitlab_token, *args, gitlab_server="gitlab.com", gitlab_project=None, **kwargs):
+    def __init__(self, server_cache_dir, gitlab_token, *args, gitlab_server="gitlab.com", gitlab_project=None, requests_session=None, **kwargs):
         self.server_cache_dir = server_cache_dir
         self.gitlab_token = gitlab_token
         self.gitlab_server = gitlab_server
         self.gitlab_project = gitlab_project
+        self.requests_session = requests.Session() if requests_session is None else requests_session
         super().__init__(*args, **kwargs)
 
     @classmethod
-    def download_gitlab_assets(cls, server_cache_dir, gitlab_server):
+    def download_gitlab_assets(cls, server_cache_dir, gitlab_server, session):
         """ Fetch all necessary assets from the Gitlab server """
         for asset in cls._gitlab_css_assets + cls._gitlab_font_assets + cls._gitlab_other_assets:
             path = server_cache_dir / Path(cls._gitlab_assets_dir) / Path(asset)
             if not path.exists():
                 path.parent.mkdir(0o755, parents=True, exist_ok=True)
-                fetch_url(f"https://{gitlab_server}/assets/{asset}", path)
+                fetch_url(f"https://{gitlab_server}/assets/{asset}", path, session)
 
     def _is_markdown_file(self, path):
         if path.lower().endswith('.md'):
@@ -92,11 +94,11 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
         if self.gitlab_project is not None:
             data["project"] = self.gitlab_project
 
-        response = requests.post(url, headers=headers, json=data)
-        if response.status_code != HTTPStatus.CREATED:
-            return f"<html>Internal error. Status code {response.status_code} from {url}.</html>"
+        with self.requests_session.post(url, headers=headers, json=data) as response:
+            if response.status_code != HTTPStatus.CREATED:
+                return f"<html>Internal error. Status code {response.status_code} from {url}.</html>"
 
-        html = response.json()["html"]
+            html = response.json()["html"]
 
         # Hack: Try to ensure that anything in class "code" is also forced to
         # be in class "white", for syntax highlighting reasons. Not sure why
@@ -256,8 +258,10 @@ def main(bind, port, directory, gitlab_server, gitlab_token_file, gitlab_project
         print("Error: No Gitlab API token provided", file=sys.stderr)
         sys.exit(1)
 
+    session = requests.Session()
+
     print("Downloading Gitlab asset files")
-    GitlabMarkdownHandler.download_gitlab_assets(server_cache_dir, gitlab_server)
+    GitlabMarkdownHandler.download_gitlab_assets(server_cache_dir, gitlab_server, session)
 
     class MarkdownServer(ThreadingHTTPServer):
         address_family = socket.AF_INET
@@ -266,7 +270,7 @@ def main(bind, port, directory, gitlab_server, gitlab_token_file, gitlab_project
             GitlabMarkdownHandler(
                 server_cache_dir, gitlab_token, request, client_address, self,
                 directory=directory, gitlab_server=gitlab_server,
-                gitlab_project=gitlab_project
+                gitlab_project=gitlab_project, requests_session=session
             )
 
     with MarkdownServer((bind, port), GitlabMarkdownHandler) as web_server:
