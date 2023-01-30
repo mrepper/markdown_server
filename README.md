@@ -45,3 +45,4 @@ Then point your local browser at http://localhost:9000/
 1. https://docs.gitlab.com/ee/user/markdown.html
 1. https://forum.gitlab.com/t/can-i-get-the-markdown-css-files-for-render/29239/2
 1. https://about.gitlab.com/company/team/structure/working-groups/gitlab-ui/
+1. https://github.github.com/gfm/

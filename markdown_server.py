@@ -19,6 +19,16 @@ from xdg import xdg_cache_home
 
 
 VERSION = "0.1.0"
+FAVICON = """
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="208" height="128" viewBox="0 0 208 128">
+    <mask id="mask">
+        <rect style="fill:#fff" width="100%" height="100%" />
+        <path d="m 30,98 0,-68 20,0 20,25 20,-25 20,0 0,68 -20,0 0,-39 -20,25 -20,-25 0,39 z" />
+        <path d="m 155,98 -30,-33 20,0 0,-35 20,0 0,35 20,0 z" />
+    </mask>
+    <rect width="100%" height="100%" ry="15" mask="url(#mask)" />
+</svg>
+""".strip()
 
 
 def fetch_url(url, path, session):
@@ -89,6 +99,11 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
                 path.parent.mkdir(0o755, parents=True, exist_ok=True)
                 fetch_url(f"https://{gitlab_server}/assets/{asset}", path, session)
 
+        # Create favicon file
+        favicon_path = server_cache_dir / Path("favicon.svg")
+        with open(favicon_path, "w", encoding="utf-8") as f:
+            f.write(re.sub(r'\s*\n\s*', '', FAVICON, re.M))
+
     def _is_markdown_file(self, path):
         if path.lower().endswith('.md'):
             return True
@@ -129,6 +144,7 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
             <html class="" lang="en">
             <meta charset="utf-8">
             <head>
+            <link rel="icon" href="/favicon.svg">
             {textwrap.indent(style.strip(), ' '*12).lstrip()}
             </head>
             <body>
@@ -156,7 +172,8 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
             - Intercept /_gitlab_assets/ paths and return the necessary file
               for rendering GLFM.
         """
-        if self.path.startswith(f"/{self._gitlab_assets_dir}/"):
+        # FIXME: only match specific files we know exist in assets dir
+        if self.path.startswith(f"/{self._gitlab_assets_dir}/") or self.path == "/favicon.svg":
             orig_directory = self.directory
             self.directory = self.server_cache_dir
             path = self.translate_path(self.path)
