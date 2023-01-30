@@ -3,6 +3,7 @@
 import datetime
 import email.utils
 import io
+import netrc
 import os
 from pathlib import Path
 import re
@@ -33,6 +34,18 @@ def fetch_url(url, path, session):
             os.fchmod(f.fileno(), 0o644)
 
     print(f"Wrote Gitlab asset file to {path}", file=sys.stderr)
+
+
+def netrc_lookup_pasword(server):
+    try:
+        nrc = netrc.netrc()
+    except (netrc.NetrcParseError, FileNotFoundError):
+        return None
+
+    result = nrc.authenticators(server)
+    if result is not None:
+        return result[2]
+    return None
 
 
 class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
@@ -255,6 +268,9 @@ def main(bind, port, directory, gitlab_server, gitlab_token_file, gitlab_project
     elif len(os.environ.get("GITLAB_TOKEN", "")) > 0:
         gitlab_token = os.environ["GITLAB_TOKEN"]
     else:
+        gitlab_token = netrc_lookup_pasword(gitlab_server)
+
+    if gitlab_token is None:
         print("Error: No Gitlab API token provided", file=sys.stderr)
         sys.exit(1)
 

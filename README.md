@@ -34,7 +34,6 @@ poetry run ./markdown_server.py ...
 Then point your local browser at http://localhost:9000/
 
 # TODO
-- [ ] look for gitlab tokens in ~/.netrc if no token file or env var is provided
 - [ ] security: prevent escaping from --directory via symlink (https://docs.python.org/3/library/http.server.html#security-considerations)
 - [ ] security: switch to version 3.11.1 to prevent log message control character exploits (https://docs.python.org/3/library/http.server.html#security-considerations)
 
