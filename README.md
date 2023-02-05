@@ -1,8 +1,6 @@
-Markdown Server
+# Markdown Server
 
-[[_TOC_]]
-
-# Goal
+## Goal
 Build a python HTTP file server that automatically renders markdown files in
 html format.
 
@@ -10,35 +8,35 @@ Markdown files are recognized as any file ending in ".md".
 
 The Gitlab API is used internally to render GLFM (GitLab Flavored Markdown).
 
-# Setup
+## Setup
 ```bash
 poetry install --no-root
 ```
 
-# Usage
-## Generic file server (no rendering)
+## Usage
+### Generic file server (no rendering)
 ```bash
 poetry run python3 -m http.server 9000 --bind localhost --directory test_dir
 ```
 
-## Markdown-rendering file server
+### Markdown-rendering file server
 ```bash
 poetry run ./markdown_server.py -gt gitlab_token.txt -d test_dir
 ```
 
-## SSH forwarding from a remote machine
+### SSH forwarding from a remote machine
 ```bash
 ssh -L 9000:localhost:9000 $server
 poetry run ./markdown_server.py ...
 ```
 Then point your local browser at http://localhost:9000/
 
-# TODO
+## TODO
 - [ ] if gitlab server returns 401, re-check credentials files and try again if they changed
 - [ ] security: prevent escaping from --directory via symlink (https://docs.python.org/3/library/http.server.html#security-considerations)
 - [ ] security: switch to version 3.11.1 to prevent log message control character exploits (https://docs.python.org/3/library/http.server.html#security-considerations)
 
-# URLs
+## URLs
 1. https://github.com/python/cpython/blob/3.9/Lib/http/server.py
 1. https://github.com/python/cpython/blob/3.9/Lib/socketserver.py
 1. https://gitlab.com/gitlab-org/gitlab/-/blob/master/doc/user/markdown.md
