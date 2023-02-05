@@ -34,6 +34,7 @@ poetry run ./markdown_server.py ...
 Then point your local browser at http://localhost:9000/
 
 # TODO
+- [ ] if gitlab server returns 401, re-check credentials files and try again if they changed
 - [ ] security: prevent escaping from --directory via symlink (https://docs.python.org/3/library/http.server.html#security-considerations)
 - [ ] security: switch to version 3.11.1 to prevent log message control character exploits (https://docs.python.org/3/library/http.server.html#security-considerations)
 

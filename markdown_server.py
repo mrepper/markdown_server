@@ -20,14 +20,14 @@ from xdg import xdg_cache_home
 
 VERSION = "0.1.0"
 FAVICON = """
-<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="208" height="128" viewBox="0 0 208 128">
-    <mask id="mask">
-        <rect style="fill:#fff" width="100%" height="100%" />
-        <path d="m 30,98 0,-68 20,0 20,25 20,-25 20,0 0,68 -20,0 0,-39 -20,25 -20,-25 0,39 z" />
-        <path d="m 155,98 -30,-33 20,0 0,-35 20,0 0,35 20,0 z" />
-    </mask>
-    <rect width="100%" height="100%" ry="15" mask="url(#mask)" />
-</svg>
+    <svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="208" height="128" viewBox="0 0 208 128">
+        <mask id="mask">
+            <rect style="fill:#fff" width="100%" height="100%" />
+            <path d="m 30,98 0,-68 20,0 20,25 20,-25 20,0 0,68 -20,0 0,-39 -20,25 -20,-25 0,39 z" />
+            <path d="m 155,98 -30,-33 20,0 0,-35 20,0 0,35 20,0 z" />
+        </mask>
+        <rect width="100%" height="100%" ry="15" mask="url(#mask)" />
+    </svg>
 """.strip()
 
 
@@ -43,7 +43,7 @@ def fetch_url(url, path, session):
                 f.write(chunk)
             os.fchmod(f.fileno(), 0o644)
 
-    print(f"Wrote Gitlab asset file to {path}", file=sys.stderr)
+        print(f"Wrote Gitlab asset file to {path}", file=sys.stderr)
 
 
 def netrc_lookup_pasword(server):
@@ -62,6 +62,8 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "MarkdownServer/" + VERSION
     _gitlab_assets_dir = '_gitlab_assets'
+
+    # NOTE: These may need to be adjusted depending on the Gitlab server version.
     _gitlab_css_assets = [
         "application-f6b592d2e7570ce5d28f3dbf7170c0b3aa19dcb951f8c9e9ebe6cd5ec44691e8.css",
         "application_utilities-6773fc1499bcdafb1e7241a3b30e1b2f36085ea9e3d80797bab0e321decce6fa.css",
@@ -82,9 +84,10 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
         "illustrations/image_comment_light_cursor-c587347a929a56f8b4d78d991607598f69daef0bcc58e972cabcb72ed96663d2.svg",
     ]
 
-    def __init__(self, server_cache_dir, gitlab_token, *args, gitlab_server="gitlab.com", gitlab_project=None, requests_session=None, **kwargs):
+    def __init__(self, server_cache_dir, gitlab_token, have_served, *args, gitlab_server="gitlab.com", gitlab_project=None, requests_session=None, **kwargs):
         self.server_cache_dir = server_cache_dir
         self.gitlab_token = gitlab_token
+        self._have_served = have_served
         self.gitlab_server = gitlab_server
         self.gitlab_project = gitlab_project
         self.requests_session = requests.Session() if requests_session is None else requests_session
@@ -175,9 +178,13 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
               rendered into HTML, then return that to the client.
             - Intercept /_gitlab_assets/ paths and return the necessary file
               for rendering GLFM.
+            - Ensure a file is always served the first time it is requested
+              (regardless of If-Modified-Since).
         """
         # FIXME: only match specific files we know exist in assets dir
         if self.path.startswith(f"/{self._gitlab_assets_dir}/") or self.path == "/favicon.svg":
+            # Rewrite directory temporarily during path translation to ensure
+            # these files are seved from our gitlab assets dir.
             orig_directory = self.directory
             self.directory = self.server_cache_dir
             path = self.translate_path(self.path)
@@ -224,7 +231,7 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
         try:
             fs = os.fstat(f.fileno())
             # Use browser cache if possible
-            if ("If-Modified-Since" in self.headers and "If-None-Match" not in self.headers):
+            if ("If-Modified-Since" in self.headers and "If-None-Match" not in self.headers) and path in self._have_served:
                 # compare If-Modified-Since and time of last file modification
                 try:
                     ims = email.utils.parsedate_to_datetime(self.headers["If-Modified-Since"])
@@ -260,6 +267,7 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
             else:
                 content_length = fs.st_size
 
+            self._have_served[path] = 1
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-type", ctype)
             self.send_header("Content-Length", str(content_length))
@@ -279,10 +287,18 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
 @click.option("-gt", "--gitlab_token_file", help="File containing Gitlab API token")
 @click.option("-gp", "--gitlab_project", help="Gitlab project to use as context when creating references (group_name/project_name)")
 def main(bind, port, directory, gitlab_server, gitlab_token_file, gitlab_project):
+    # This is used to ensure we always serve a file at least once when we first
+    # start up, to avoid browsers from caching 401's from temporary gitlab issues,
+    # etc.
+    # Key: path
+    # Value: 1 (if file has been served since program startup)
+    have_served = {}
+
     directory = os.path.realpath(directory)
     server_cache_dir = xdg_cache_home() / Path('markdown_server')
     server_cache_dir.mkdir(mode=0o700, exist_ok=True)
 
+    # TODO: move this to the handler class, add method for checking for new credentials on 401's
     if gitlab_token_file:
         with open(gitlab_token_file, "r", encoding="utf-8") as f:
             gitlab_token = f.read().strip()
@@ -305,9 +321,10 @@ def main(bind, port, directory, gitlab_server, gitlab_token_file, gitlab_project
 
         def finish_request(self, request, client_address):
             GitlabMarkdownHandler(
-                server_cache_dir, gitlab_token, request, client_address, self,
-                directory=directory, gitlab_server=gitlab_server,
-                gitlab_project=gitlab_project, requests_session=session
+                server_cache_dir, gitlab_token, have_served, request,
+                client_address, self, directory=directory,
+                gitlab_server=gitlab_server, gitlab_project=gitlab_project,
+                requests_session=session
             )
 
     with MarkdownServer((bind, port), GitlabMarkdownHandler) as web_server:
