@@ -19,6 +19,7 @@ from xdg import xdg_cache_home
 
 
 VERSION = "0.1.0"
+DEFAULT_GITLAB_SERVER = "gitlab.com"
 FAVICON = """
     <svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="208" height="128" viewBox="0 0 208 128">
         <mask id="mask">
@@ -84,7 +85,7 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
         "illustrations/image_comment_light_cursor-c587347a929a56f8b4d78d991607598f69daef0bcc58e972cabcb72ed96663d2.svg",
     ]
 
-    def __init__(self, server_cache_dir, gitlab_token, have_served, *args, gitlab_server="gitlab.com", gitlab_project=None, requests_session=None, **kwargs):
+    def __init__(self, server_cache_dir, gitlab_token, have_served, *args, gitlab_server=DEFAULT_GITLAB_SERVER, gitlab_project=None, requests_session=None, **kwargs):
         self.server_cache_dir = server_cache_dir
         self.gitlab_token = gitlab_token
         self._have_served = have_served
@@ -286,7 +287,7 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
 @click.option("-b", "--bind", default="127.0.0.1", help="Address to bind to", show_default=True)
 @click.option("-p", "--port", default=9000, type=int, help="Port to listen on", show_default=True)
 @click.option("-d", "--directory", default=".", help="Directory to serve from", show_default=True)
-@click.option("-gs", "--gitlab_server", default="gitlab.com", help="Gitlab server hostname/IP", show_default=True)
+@click.option("-gs", "--gitlab_server", default=DEFAULT_GITLAB_SERVER, help="Gitlab server hostname/IP", show_default=True)
 @click.option("-nt", "--gitlab_no_token", is_flag=True, help="Do token-less Gitlab API calls")
 @click.option("-gt", "--gitlab_token_file", help="File containing Gitlab API token")
 @click.option("-gp", "--gitlab_project", help="Gitlab project to use as context when creating references (group_name/project_name)")
