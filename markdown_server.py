@@ -116,12 +116,15 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
         url = f"https://{self.gitlab_server}/api/v4/markdown"
         headers = {
             "Content-Type": "application/json; charset=utf-8",
-            "PRIVATE-TOKEN": self.gitlab_token,
         }
+        if self.gitlab_token is not None:
+            headers["PRIVATE-TOKEN"] = self.gitlab_token
+
         data = {
             "text": markdown,
             "gfm": True,
         }
+
         if self.gitlab_project is not None:
             data["project"] = self.gitlab_project
 
@@ -284,9 +287,10 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
 @click.option("-p", "--port", default=9000, type=int, help="Port to listen on", show_default=True)
 @click.option("-d", "--directory", default=".", help="Directory to serve from", show_default=True)
 @click.option("-gs", "--gitlab_server", default="gitlab.com", help="Gitlab server hostname/IP", show_default=True)
+@click.option("-nt", "--gitlab_no_token", is_flag=True, help="Do token-less Gitlab API calls")
 @click.option("-gt", "--gitlab_token_file", help="File containing Gitlab API token")
 @click.option("-gp", "--gitlab_project", help="Gitlab project to use as context when creating references (group_name/project_name)")
-def main(bind, port, directory, gitlab_server, gitlab_token_file, gitlab_project):
+def main(bind, port, directory, gitlab_server, gitlab_token_file, gitlab_project, gitlab_no_token):
     # This is used to ensure we always serve a file at least once when we first
     # start up, to avoid browsers from caching 401's from temporary gitlab issues,
     # etc.
@@ -298,18 +302,15 @@ def main(bind, port, directory, gitlab_server, gitlab_token_file, gitlab_project
     server_cache_dir = xdg_cache_home() / Path('markdown_server')
     server_cache_dir.mkdir(mode=0o700, exist_ok=True)
 
-    # TODO: move this to the handler class, add method for checking for new credentials on 401's
-    if gitlab_token_file:
+    if gitlab_no_token:
+        gitlab_token = None
+    elif gitlab_token_file:
         with open(gitlab_token_file, "r", encoding="utf-8") as f:
             gitlab_token = f.read().strip()
     elif len(os.environ.get("GITLAB_TOKEN", "")) > 0:
         gitlab_token = os.environ["GITLAB_TOKEN"]
     else:
         gitlab_token = netrc_lookup_pasword(gitlab_server)
-
-    if gitlab_token is None:
-        print("Error: No Gitlab API token provided", file=sys.stderr)
-        sys.exit(1)
 
     session = requests.Session()
 
