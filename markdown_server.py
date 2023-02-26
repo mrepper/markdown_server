@@ -157,6 +157,11 @@ class GitlabMarkdownHandler(SimpleHTTPRequestHandler):
             <head>
             <link rel="icon" href="/favicon.svg">
             {textwrap.indent(style.strip(), ' '*12).lstrip()}
+            <style>
+            body {{
+              margin: 30px;
+            }}
+            </style>
             </head>
             <body>
             <div class="file-content md">
